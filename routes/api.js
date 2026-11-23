@@ -13,14 +13,31 @@ function anonymize(ip) {
     .digest('hex');
 }
 
+const priceCache = new Map(); // SYMBOL -> { price, time }
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const FRESH_MS = 60000;
+
 async function fetchPrice(symbol) {
-  try {
-    const res = await fetch(`${PROXY}/${encodeURIComponent(symbol)}/quote`);
-    const data = await res.json();
-    return data && typeof data.latestPrice === 'number' ? data.latestPrice : null;
-  } catch (e) {
-    return null;
+  const cached = priceCache.get(symbol);
+  if (cached && Date.now() - cached.time < FRESH_MS) return cached.price;
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      const res = await fetch(`${PROXY}/${encodeURIComponent(symbol)}/quote`);
+      const text = await res.text();
+      let data;
+      try { data = JSON.parse(text); } catch (e) { data = null; }
+      if (data && typeof data.latestPrice === 'number') {
+        priceCache.set(symbol, { price: data.latestPrice, time: Date.now() });
+        return data.latestPrice;
+      }
+      console.warn(`[price] ${symbol} attempt ${attempt + 1}: HTTP ${res.status} ${text.slice(0, 120)}`);
+    } catch (e) {
+      console.warn(`[price] ${symbol} attempt ${attempt + 1}: ${e.message}`);
+    }
+    await sleep(400 * (attempt + 1));
   }
+  return cached ? cached.price : null; // stale price beats an error
 }
 
 async function getStock(symbol, like, hashedIp) {
