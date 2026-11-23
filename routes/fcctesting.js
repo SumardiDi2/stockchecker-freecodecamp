@@ -82,14 +82,13 @@ module.exports = function (app) {
       process.nextTick(() =>  res.json(testFilter(runner.report, req.query.type, req.query.n)));
     });
   });
-  app.get('/_api/app-info', function(req, res) {
-    var hs = Object.keys(res._headers)
-      .filter(h => !h.match(/^access-control-\w+/));
-    var hObj = {};
-    hs.forEach(h => {hObj[h] = res._headers[h]});
-    delete res._headers['strict-transport-security'];
-    res.json({headers: hObj});
+  app.get('/_api/app-info', function (req, res) {
+  const hObj = {};
+  Object.entries(res.getHeaders()).forEach(([k, v]) => {
+    if (!/^access-control-\w+/.test(k)) hObj[k] = v;
   });
+  res.json({ headers: hObj });
+});
   
 };
 
